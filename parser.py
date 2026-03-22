@@ -3,6 +3,7 @@
 Баскетбол и Волейбол
 """
 import asyncio
+import os
 import aiohttp
 import logging
 import re
@@ -215,21 +216,68 @@ class FonbetParser:
 # ─────────────────────────────────────────────
 class MaxlineParser:
     NAME = "Maxline"
+    API_LOGIN = "https://www.maxline.by/api/auth/login"
     API_LIVE = "https://www.maxline.by/api/live/events"
     API_LINE = "https://www.maxline.by/api/prematch/events"
 
     SPORT_IDS = {"basketball": 2, "volleyball": 6}
+    _token = None
 
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
 
+    async def login(self) -> bool:
+        """Авторизация в Maxline"""
+        login = os.getenv("MAXLINE_LOGIN", "")
+        password = os.getenv("MAXLINE_PASSWORD", "")
+        if not login or not password:
+            logger.warning("Maxline: логин/пароль не заданы")
+            return False
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Referer": "https://www.maxline.by/",
+                "User-Agent": config.HEADERS["User-Agent"],
+            }
+            payload = {"login": login, "password": password}
+            async with self.session.post(self.API_LOGIN, json=payload,
+                                         headers=headers,
+                                         timeout=aiohttp.ClientTimeout(total=15)) as r:
+                data = await r.json(content_type=None)
+                token = data.get("token") or data.get("accessToken") or data.get("access_token")
+                if token:
+                    MaxlineParser._token = token
+                    logger.info("Maxline: авторизация успешна")
+                    return True
+                # Попробуем куки
+                if r.status == 200:
+                    logger.info("Maxline: авторизация через куки")
+                    return True
+                logger.warning(f"Maxline login failed: {data}")
+                return False
+        except Exception as e:
+            logger.warning(f"Maxline login error: {e}")
+            return False
+
     async def fetch(self, url: str, params: dict = None) -> dict | None:
         try:
-            headers = {**config.HEADERS, "Referer": "https://www.maxline.by/"}
+            headers = {
+                **config.HEADERS,
+                "Referer": "https://www.maxline.by/",
+            }
+            if MaxlineParser._token:
+                headers["Authorization"] = f"Bearer {MaxlineParser._token}"
             async with self.session.get(url, params=params, headers=headers,
                                         timeout=aiohttp.ClientTimeout(total=15)) as r:
+                if r.status == 401:
+                    # Токен истёк — логинимся заново
+                    logger.info("Maxline: токен истёк, переавторизация...")
+                    MaxlineParser._token = None
+                    await self.login()
+                    return await self.fetch(url, params)
                 if r.status == 200:
                     return await r.json(content_type=None)
+                logger.warning(f"Maxline fetch status: {r.status}")
         except Exception as e:
             logger.warning(f"Maxline fetch error: {e}")
         return None
@@ -238,6 +286,10 @@ class MaxlineParser:
         sport_id = self.SPORT_IDS.get(sport)
         if not sport_id:
             return []
+
+        # Авторизуемся если ещё не залогинены
+        if not MaxlineParser._token:
+            await self.login()
 
         url = self.API_LIVE if live else self.API_LINE
         params = {"sportId": sport_id}
