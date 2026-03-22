@@ -3,7 +3,7 @@ import os
 # ========================
 # TELEGRAM BOT
 # ========================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+BOT_TOKEN = os.getenv("8758928270:AAFBmV0Lo22MSHNOL-OqwCWpKLFPmBe3aCw")
 CHAT_IDS = []  # список chat_id для уведомлений
 
 # ========================
