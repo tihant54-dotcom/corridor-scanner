@@ -76,11 +76,17 @@ class State:
             try:
                 d = json.load(open("state.json"))
                 self.subscribers = set(d.get("subscribers", []))
-                self.demo = d.get("demo", True)
                 self.min_profit = d.get("min_profit", 0.5)
                 self.sports = set(d.get("sports", ["basketball", "volleyball"]))
+                # Если DEMO_MODE=true в Railway — всегда Demo
+                if config.FORCE_DEMO:
+                    self.demo = True
+                else:
+                    self.demo = d.get("demo", True)
             except Exception:
                 pass
+        if config.FORCE_DEMO:
+            self.demo = True
 
 
 st = State()

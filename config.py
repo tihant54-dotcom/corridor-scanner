@@ -10,16 +10,18 @@ if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
     print("ОШИБКА: BOT_TOKEN не задан! Добавь переменную BOT_TOKEN в Railway -> Variables", file=sys.stderr)
     sys.exit(1)
 
-CHAT_IDS = []  # список chat_id для уведомлений
+# Принудительный Demo режим через переменную Railway
+FORCE_DEMO = os.getenv("DEMO_MODE", "").lower() in ("true", "1", "yes")
+
+CHAT_IDS = []
 
 # ========================
 # ПАРСИНГ
 # ========================
-PARSE_INTERVAL = 30  # секунд между проверками
-MIN_CORRIDOR_PROFIT = 0.5  # минимальный % профита коридора
-MAX_CORRIDOR_PROFIT = 20.0  # максимальный % (слишком высокий = ошибка)
+PARSE_INTERVAL = 30
+MIN_CORRIDOR_PROFIT = 0.5
+MAX_CORRIDOR_PROFIT = 20.0
 
-# Спорты для мониторинга
 SPORTS = ["basketball", "volleyball"]
 
 # ========================
@@ -37,7 +39,6 @@ MAXLINE_SPORT_IDS = {
     "volleyball": 6,
 }
 
-# Headers для запросов
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
     "Accept": "application/json, text/plain, */*",
@@ -45,17 +46,7 @@ HEADERS = {
     "Referer": "https://fonbet.ru/",
 }
 
-# Прокси (опционально)
 PROXIES = None
-# PROXIES = {"http": "http://user:pass@proxy:port", "https": "http://user:pass@proxy:port"}
-
-# ========================
-# МАТЧИНГ КОМАНД
-# ========================
-FUZZY_THRESHOLD = 75  # порог схожести названий команд (0-100)
-
-# ========================
-# ЛОГИРОВАНИЕ
-# ========================
+FUZZY_THRESHOLD = 75
 LOG_LEVEL = "INFO"
 LOG_FILE = "corridor.log"
