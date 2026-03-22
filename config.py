@@ -4,7 +4,7 @@ import sys
 # ========================
 # TELEGRAM BOT
 # ========================
-BOT_TOKEN = (os.getenv("BOT_TOKEN") or "").strip()
+BOT_TOKEN = (os.getenv("8377501277:AAHHsFzPv1Mfh-K5eEHixIl0rw2sBSJ0Lgo") or "").strip()
 
 if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
     print("ОШИБКА: BOT_TOKEN не задан! Добавь переменную BOT_TOKEN в Railway -> Variables", file=sys.stderr)
