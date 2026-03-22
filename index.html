@@ -622,26 +622,38 @@ const S = {
 // Запросы идут из браузера пользователя — без прокси!
 // ════════════════════════════════════════════
 
-const CORS_PROXY = ''; // Пусто = прямой запрос из браузера через TG WebApp
+// CORS прокси — используется если браузер блокирует прямые запросы
+// Внутри Telegram WebApp прямые запросы работают
+const CORS_PROXY = '';
+
+// CORS прокси — обходит блокировку из WebView Telegram
+const PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => url, // прямой запрос как fallback
+];
 
 async function fetchJSON(url, opts = {}) {
-  try {
-    const r = await fetch(url, {
-      ...opts,
-      headers: {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'ru-RU,ru;q=0.9',
-        'Cache-Control': 'no-cache',
-        ...(opts.headers || {}),
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
-  } catch (e) {
-    log('e', `Fetch error: ${url.split('/').slice(0,4).join('/')} → ${e.message}`);
-    return null;
+  for (const proxy of PROXIES) {
+    const proxyUrl = proxy(url);
+    try {
+      const r = await fetch(proxyUrl, {
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'ru-RU,ru;q=0.9',
+          'Cache-Control': 'no-cache',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      if (data) return data;
+    } catch (e) {
+      log('w', `Proxy failed: ${proxyUrl.slice(0,40)}... → ${e.message}`);
+    }
   }
+  log('e', `Все прокси не ответили: ${url.split('/').slice(0,4).join('/')}`);
+  return null;
 }
 
 // ── FONBET ─────────────────────────────────
@@ -935,8 +947,10 @@ function demoCorridors() {
 
     const base = sport==='basketball' ? 150+Math.floor(Math.random()*20) : 48+Math.floor(Math.random()*10);
     const line = base + (Math.random()>.5 ? 2.5 : 0);
-    const k1 = +(1.82 + Math.random()*0.15).toFixed(2);
-    const k2 = +(1.82 + Math.random()*0.15).toFixed(2);
+    // Чередуем: каждые 2 события гарантированный коридор (k>2.0)
+    const guaranteed = results.length % 2 === 0;
+    const k1 = guaranteed ? +(2.05 + Math.random()*0.15).toFixed(2) : +(1.82 + Math.random()*0.15).toFixed(2);
+    const k2 = guaranteed ? +(2.05 + Math.random()*0.15).toFixed(2) : +(1.82 + Math.random()*0.15).toFixed(2);
     const margin = 1/k1 + 1/k2;
     if (margin >= 1) continue;
     const profit = +((1/margin-1)*100).toFixed(2);
@@ -980,39 +994,38 @@ async function doScan() {
   setStatus(true, 'СКАНИРУЮ');
   showLoader(true);
   hideErr();
-
-  log('i', 'Запуск сканирования...');
+  log('i', 'Запрос к серверу...');
 
   let allCorridors = [];
-  let apiWorked = false;
 
-  for (const sport of S.sports) {
-    for (const live of [true, false]) {
-      if (live && !S.types.has('live')) continue;
-      if (!live && !S.types.has('line')) continue;
+  try {
+    const r = await fetch(window.location.origin + '/api/scan', {
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
 
-      try {
-        const [fbEvs, mlEvs] = await Promise.all([
-          fetchFonbet(sport, live),
-          fetchMaxline(sport, live),
-        ]);
-
-        if (fbEvs.length > 0 || mlEvs.length > 0) apiWorked = true;
-
-        const found = findCorridors(fbEvs, mlEvs);
-        allCorridors.push(...found);
-        log(found.length>0?'s':'i',
-          `${sport}/${live?'live':'line'}: ${found.length} коридоров`);
-      } catch(e) {
-        log('e', `Ошибка ${sport}: ${e.message}`);
-      }
+    if (data.ok && data.corridors && data.corridors.length > 0) {
+      log('s', `Сервер: ${data.count} коридоров`);
+      const pMap = {full:'Матч',fulltime:'Матч',h1:'1-я пол.',h2:'2-я пол.',
+                    q1:'1Q',q2:'2Q',q3:'3Q',q4:'4Q',s1:'Сет 1',s2:'Сет 2',s3:'Сет 3'};
+      allCorridors = data.corridors.map(c => ({
+        sport: c.sport, home: c.home, away: c.away,
+        league: c.league, live: c.is_live, score: c.score,
+        line: c.line, period: c.period, pLabel: pMap[c.period] || c.period,
+        bk1: c.bk1_name, k1: c.bk1_odds, type1: 'ТБ',
+        bk2: c.bk2_name, k2: c.bk2_odds, type2: 'ТМ',
+        profit: c.profit_percent,
+        ts: data.time || new Date().toLocaleTimeString('ru'),
+      }));
+    } else if (data.ok) {
+      log('i', 'Сервер: коридоров не найдено');
+    } else {
+      throw new Error(data.error || 'Ошибка сервера');
     }
-  }
-
-  // Если API не ответил — показываем демо
-  if (!apiWorked) {
-    log('w', 'API недоступен — показываю демо-данные');
-    showErr('⚠️ API Fonbet/Maxline не ответил (CORS или гео-блокировка).\n<strong>Показаны демо-данные.</strong>\nОткройте страницу через официальный Telegram-клиент.');
+  } catch(e) {
+    log('w', `Ошибка сервера: ${e.message} — показываю демо`);
+    showErr('⚠️ Сервер временно недоступен. Показаны демо-данные.');
     allCorridors = demoCorridors();
   }
 
@@ -1026,7 +1039,6 @@ async function doScan() {
   updateStats(S.corridors);
 
   if (S.corridors.length > 0 && twa?.showPopup) {
-    // Уведомление через Telegram
     twa.showPopup({
       title: '✅ Найдены коридоры!',
       message: `${S.corridors.length} коридоров, лучший: +${S.corridors[0].profit}%`,

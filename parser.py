@@ -349,16 +349,21 @@ class DemoDataGenerator:
         count = random.randint(4, 8)
         selected = random.sample(teams_list, min(count, len(teams_list)))
 
-        for home, away in selected:
+        for i, (home, away) in enumerate(selected):
             total_base = 155.5 if sport == "basketball" else 48.5
             total = total_base + random.choice([-5, -2.5, 0, 2.5, 5])
 
-            # Небольшое смещение котировок между БК
-            offset = random.uniform(-0.06, 0.06)
+            # Каждые 2 события — гарантированный коридор (k>2.0)
+            if i % 2 == 0:
+                k_over = round(random.uniform(2.05, 2.20), 2)
+                k_under = round(random.uniform(2.05, 2.20), 2)
+            else:
+                k_over = round(random.uniform(1.80, 1.95), 2)
+                k_under = round(random.uniform(1.80, 1.95), 2)
 
             markets = [
-                Market("total_over", total, round(random.uniform(1.80, 1.95) + offset, 2), bookmaker, "fulltime"),
-                Market("total_under", total, round(random.uniform(1.80, 1.95) - offset, 2), bookmaker, "fulltime"),
+                Market("total_over", total, k_over, bookmaker, "fulltime"),
+                Market("total_under", total, k_under, bookmaker, "fulltime"),
                 Market("total_over", total - 2.5, round(random.uniform(1.70, 1.85), 2), bookmaker, "fulltime"),
                 Market("total_under", total + 2.5, round(random.uniform(1.70, 1.85), 2), bookmaker, "fulltime"),
             ]
