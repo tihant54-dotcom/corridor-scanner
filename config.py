@@ -1,9 +1,15 @@
 import os
+import sys
 
 # ========================
 # TELEGRAM BOT
 # ========================
-BOT_TOKEN = os.getenv("8758928270:AAFBmV0Lo22MSHNOL-OqwCWpKLFPmBe3aCw")
+BOT_TOKEN = (os.getenv("BOT_TOKEN") or "").strip()
+
+if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    print("ОШИБКА: BOT_TOKEN не задан! Добавь переменную BOT_TOKEN в Railway -> Variables", file=sys.stderr)
+    sys.exit(1)
+
 CHAT_IDS = []  # список chat_id для уведомлений
 
 # ========================
